@@ -30,8 +30,8 @@
 
 #define AOUT_PIN A0
 int percentageHumidity;
-const int dry = 583;
-const int wet = 314;
+const float dry = 583.00;
+const float wet = 314.00;
 
 /*
 //
@@ -68,7 +68,7 @@ static const u1_t PROGMEM APPKEY[16] = {0x6B, 0x2B, 0xF8, 0x4F, 0x56, 0x4A, 0x81
 void os_getDevKey (u1_t* buf) {  memcpy_P(buf, APPKEY, 16);}
 
 // payload to send to TTN gateway
-static uint8_t payload[5];
+static uint8_t payload[3];
 static osjob_t sendjob;
 
 // Schedule TX every this many seconds (might become longer due to duty
@@ -220,12 +220,13 @@ void onEvent (ev_t ev) {
     }
 }
 
+
 float getHumidity(){
   
-  int sensorValue = analogRead(AOUT_PIN);
+  float sensorValue = analogRead(AOUT_PIN);
   Serial.print("analogSensorValue = ");
   Serial.println(sensorValue);
-  int percentageHumidity = map(sensorValue, wet, dry, 100, 0);
+  float percentageHumidity = map(sensorValue, wet, dry, 100.00, 0.00);
   Serial.print("percentageHumidity = ");
   Serial.println(percentageHumidity);
   return(percentageHumidity);
@@ -252,6 +253,10 @@ void do_send(osjob_t* j){
         // int -> bytes
         byte tempLow = lowByte(payloadTemp);
         byte tempHigh = highByte(payloadTemp);
+        Serial.print("lowByte = "); 
+        Serial.println(tempLow);
+        Serial.print("highByte = ");
+        Serial.println(tempHigh);
         // place the bytes into the payload
         payload[0] = tempLow;
         payload[1] = tempHigh;
