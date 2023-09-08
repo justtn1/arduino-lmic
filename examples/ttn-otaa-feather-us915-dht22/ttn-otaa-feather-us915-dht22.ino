@@ -1,7 +1,7 @@
 /*******************************************************************************
  * The Things Network - Sensor Data Example
  *
- * Example of sending a valid LoRaWAN packet with DHT22 temperature and
+ * Example of sending a valid LoRaWAN packet with DHT22 temperatre and
  * humidity data to The Things Networ using a Feather M0 LoRa.
  *
  * Learn Guide: https://learn.adafruit.com/the-things-network-for-feather
@@ -27,6 +27,13 @@
 #define DHTPIN 10
 #define DHTTYPE DHT22
 
+
+#define AOUT_PIN A0
+int percentageHumidity;
+const int dry = 583;
+const int wet = 314;
+
+/*
 //
 // For normal use, we require that you edit the sketch to replace FILLMEIN
 // with values assigned by the TTN console. However, for regression tests,
@@ -41,21 +48,23 @@
 #define FILLMEIN (#dont edit this, edit the lines that use FILLMEIN)
 #endif
 
+*/
+
 // This EUI must be in little-endian format, so least-significant-byte
 // first. When copying an EUI from ttnctl output, this means to reverse
 // the bytes. For TTN issued EUIs the last bytes should be 0xD5, 0xB3,
 // 0x70.
-static const u1_t PROGMEM APPEUI[8] = { FILLMEIN };
+static const u1_t PROGMEM APPEUI[8] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 void os_getArtEui (u1_t* buf) { memcpy_P(buf, APPEUI, 8);}
 
 // This should also be in little endian format, see above.
-static const u1_t PROGMEM DEVEUI[8] = { FILLMEIN };
+static const u1_t PROGMEM DEVEUI[8] = {0xBB, 0x0D, 0x06, 0xD0, 0x7E, 0xD5, 0xB3, 0x70};
 void os_getDevEui (u1_t* buf) { memcpy_P(buf, DEVEUI, 8);}
 
 // This key should be in big endian format (or, since it is not really a
 // number but a block of memory, endianness does not really apply). In
 // practice, a key taken from the TTN console can be copied as-is.
-static const u1_t PROGMEM APPKEY[16] = { FILLMEIN };
+static const u1_t PROGMEM APPKEY[16] = {0x6B, 0x2B, 0xF8, 0x4F, 0x56, 0x4A, 0x81, 0xEB, 0x3C, 0x35, 0x5C, 0x0B, 0xF6, 0x8A, 0x83, 0xCC};
 void os_getDevKey (u1_t* buf) {  memcpy_P(buf, APPKEY, 16);}
 
 // payload to send to TTN gateway
@@ -70,13 +79,13 @@ const unsigned TX_INTERVAL = 30;
 // /!\ By default Adafruit Feather M0's pin 6 and DIO1 are not connected.
 // Please ensure they are connected.
 const lmic_pinmap lmic_pins = {
-    .nss = 8,
+    .nss = 16,
     .rxtx = LMIC_UNUSED_PIN,
-    .rst = 4,
-    .dio = {3, 6, LMIC_UNUSED_PIN},
-    .rxtx_rx_active = 0,
-    .rssi_cal = 8,              // LBT cal for the Adafruit Feather M0 LoRa, in dB
-    .spi_freq = 8000000,
+    .rst = 17,
+    .dio = {21, 22, 23},
+    //.rxtx_rx_active = 0,
+    //.rssi_cal = 8,              // LBT cal for the Adafruit Feather M0 LoRa, in dB
+    //.spi_freq = 8000000,
 };
 
 // init. DHT
@@ -211,28 +220,35 @@ void onEvent (ev_t ev) {
     }
 }
 
+float getHumidity(){
+  
+  int sensorValue = analogRead(AOUT_PIN);
+  Serial.print("analogSensorValue = ");
+  Serial.println(sensorValue);
+  int percentageHumidity = map(sensorValue, wet, dry, 100, 0);
+  Serial.print("percentageHumidity = ");
+  Serial.println(percentageHumidity);
+  return(percentageHumidity);
+};
+
 void do_send(osjob_t* j){
     // Check if there is not a current TX/RX job running
     if (LMIC.opmode & OP_TXRXPEND) {
         Serial.println(F("OP_TXRXPEND, not sending"));
     } else {
-        // read the temperature from the DHT22
-        float temperature = dht.readTemperature();
-        Serial.print("Temperature: "); Serial.print(temperature);
-        Serial.println(" *C");
+        // read the temperaure from the DHT22
+        //float temperature = dht.readTemperature(); //-
+        float humidity = getHumidity();
+        Serial.print("Humidity: "); 
+        Serial.print(humidity);
+        Serial.println("% ");
         // adjust for the f2sflt16 range (-1 to 1)
-        temperature = temperature / 100;
+        humidity = humidity / 100;
 
-        // read the humidity from the DHT22
-        float rHumidity = dht.readHumidity();
-        Serial.print("%RH ");
-        Serial.println(rHumidity);
-        // adjust for the f2sflt16 range (-1 to 1)
-        rHumidity = rHumidity / 100;
 
         // float -> int
         // note: this uses the sflt16 datum (https://github.com/mcci-catena/arduino-lmic#sflt16)
-        uint16_t payloadTemp = LMIC_f2sflt16(temperature);
+        uint16_t payloadTemp = LMIC_f2sflt16(humidity);
         // int -> bytes
         byte tempLow = lowByte(payloadTemp);
         byte tempHigh = highByte(payloadTemp);
@@ -240,13 +256,6 @@ void do_send(osjob_t* j){
         payload[0] = tempLow;
         payload[1] = tempHigh;
 
-        // float -> int
-        uint16_t payloadHumid = LMIC_f2sflt16(rHumidity);
-        // int -> bytes
-        byte humidLow = lowByte(payloadHumid);
-        byte humidHigh = highByte(payloadHumid);
-        payload[2] = humidLow;
-        payload[3] = humidHigh;
 
         // prepare upstream data transmission at the next possible time.
         // transmit on port 1 (the first parameter); you can use any value from 1 to 223 (others are reserved).
@@ -267,17 +276,31 @@ void setup() {
 
     // LMIC init
     os_init();
+
+    delay(10);
     // Reset the MAC state. Session and pending data transfers will be discarded.
     LMIC_reset();
+    delay(10);
+
+
+
+    //LMIC.datarate = SF9;
+    //LMIC.txpow = 14;
+    //LMIC_startJoining();
+    Serial.println("Joining...");
+
     // Disable link-check mode and ADR, because ADR tends to complicate testing.
+    LMIC_setClockError(MAX_CLOCK_ERROR * 3 / 100); //--
     LMIC_setLinkCheckMode(0);
+    LMIC.dn2Dr = DR_SF9;//--
     // Set the data rate to Spreading Factor 7.  This is the fastest supported rate for 125 kHz channels, and it
     // minimizes air time and battery power. Set the transmission power to 14 dBi (25 mW).
     LMIC_setDrTxpow(DR_SF7,14);
     // in the US, with TTN, it saves join time if we start on subband 1 (channels 8-15). This will
     // get overridden after the join by parameters from the network. If working with other
     // networks or in other regions, this will need to be changed.
-    LMIC_selectSubBand(1);
+    
+    /*LMIC_selectSubBand(1);*/
 
     // Start job (sending automatically starts OTAA too)
     do_send(&sendjob);
